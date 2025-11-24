@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Approval - School Management System</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth-helper.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0b7a3e 0%, #085a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 50px 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .icon {
+            width: 80px;
+            height: 80px;
+            background: #ffc107;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .icon svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 15px;
+        }
+
+        .status {
+            display: inline-block;
+            background: #fff3cd;
+            color: #856404;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #0b7a3e;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: left;
+            border-radius: 8px;
+        }
+
+        .info-box h3 {
+            color: #0b7a3e;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .info-box li {
+            color: #555;
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .info-box li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #0b7a3e;
+            font-weight: bold;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #0b7a3e;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #096332;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(11, 122, 62, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        .user-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #004085;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0b7a3e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+            </svg>
+        </div>
+
+        <h1>Account Pending Approval</h1>
+        <div class="status">⏳ Awaiting Review</div>
+
+        <p>Thank you for registering with our School Management System!</p>
+        <p>Your account has been created successfully, but it requires approval from school administration before you
+            can access the system.</p>
+
+        <div class="info-box">
+            <h3>What happens next?</h3>
+            <ul>
+                <li>School administrators will review your account</li>
+                <li>You'll receive an email once approved</li>
+                <li>After approval, you can log in and access your dashboard</li>
+                <li>This process typically takes 1-2 business days</li>
+            </ul>
+        </div>
+
+        <div class="user-info" id="userInfo">
+            <div class="loading"></div>
+            Loading account information...
+        </div>
+
+        <div class="button-group">
+            <button class="btn btn-primary" onclick="checkApprovalStatus()">
+                Check Status
+            </button>
+            <button class="btn btn-secondary" onclick="logout()">
+                Logout
+            </button>
+        </div>
+
+        <p style="margin-top: 30px; font-size: 14px; color: #999;">
+            Need help? Contact the school office at
+            <a href="mailto:admin@school.com" style="color: #0b7a3e;">admin@school.com</a>
+        </p>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let userData = null;
+
+        // Check authentication and load user info on page load
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                // Not logged in, redirect to login
+                window.location.href = 'login.html';
+                return;
+            }
+
+            currentUser = user;
+            await loadUserInfo();
+        });
+
+        async function loadUserInfo() {
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+
+                if (userDoc.exists) {
+                    userData = userDoc.data();
+                    const userInfoDiv = document.getElementById('userInfo');
+
+                    userInfoDiv.innerHTML = `
+            <strong>Account Details:</strong><br>
+            Email: ${userData.email || currentUser.email}<br>
+            Role: ${capitalizeFirstLetter(userData.role || 'student')}<br>
+            Status: ${userData.approved ? '✅ Approved' : '⏳ Pending Approval'}
+          `;
+
+                    // If already approved, redirect to appropriate dashboard
+                    if (userData.approved) {
+                        setTimeout(() => {
+                            const redirectUrl = getRedirectUrl(userData);
+                            window.location.href = redirectUrl;
+                        }, 2000);
+                    }
+                } else {
+                    document.getElementById('userInfo').innerHTML = `
+            <strong>Email:</strong> ${currentUser.email}<br>
+            <em>Account information is being processed...</em>
+          `;
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                document.getElementById('userInfo').innerHTML = `
+          <strong>Email:</strong> ${currentUser.email}<br>
+          <em style="color: #dc3545;">Error loading account details</em>
+        `;
+            }
+        }
+
+        async function checkApprovalStatus() {
+            const statusBtn = event.target;
+            statusBtn.disabled = true;
+            statusBtn.innerHTML = '<div class="loading"></div> Checking...';
+
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+
+                if (userDoc.exists) {
+                    userData = userDoc.data();
+
+                    if (userData.approved) {
+                        alert('Great news! Your account has been approved. Redirecting to your dashboard...');
+                        const redirectUrl = getRedirectUrl(userData);
+                        window.location.href = redirectUrl;
+                    } else {
+                        alert('Your account is still pending approval. You will receive an email notification once approved.');
+                        await loadUserInfo();
+                    }
+                } else {
+                    alert('Unable to fetch account status. Please try again later.');
+                }
+            } catch (error) {
+                console.error('Error checking approval status:', error);
+                alert('Error checking status. Please try again.');
+            } finally {
+                statusBtn.disabled = false;
+                statusBtn.innerHTML = 'Check Status';
+            }
+        }
+
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+    </script>
+</body>
+
+</html>
