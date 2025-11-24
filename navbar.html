@@ -1,0 +1,69 @@
+<!-- NAVBAR (Reusable on all pages) -->
+<div id="navbar"
+     style="
+        background:#0b7a3e;
+        color:white;
+        padding:12px;
+        display:flex;
+        align-items:center;
+        gap:16px;
+        font-family:Arial, sans-serif;
+     ">
+  
+  <!-- LOGO -->
+  <img src="ap logo.png" style="height:42px; border-radius:4px">
+
+  <!-- MENU LINKS -->
+  <a href="students.html" style="color:white;text-decoration:none;font-size:15px;">Home</a>
+  <a href="admissionform.html" style="color:white;text-decoration:none;font-size:15px;">Admission</a>
+  <a href="savedforms.html" style="color:white;text-decoration:none;font-size:15px;">Saved Forms</a>
+  <a href="progress.html" style="color:white;text-decoration:none;font-size:15px;">Progress</a>
+  <a href="attendance.html" style="color:white;text-decoration:none;font-size:15px;">Attendance</a>
+
+  <!-- ADMIN ONLY LINK (default hidden) -->
+  <a id="adminLink"
+     href="admin.html"
+     style="color:white;text-decoration:none;font-size:15px;display:none;">
+     Admin Dashboard
+  </a>
+
+  <!-- RIGHT SIDE: LOGOUT BUTTON -->
+  <button onclick="logout()"
+          style="
+            margin-left:auto;
+            background:white;
+            color:#0b7a3e;
+            border:0;
+            padding:6px 12px;
+            font-weight:bold;
+            border-radius:4px;
+            cursor:pointer;
+          ">
+    Logout
+  </button>
+</div>
+
+<!-- REQUIRED Firebase references (included only once when navbar loads) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<script>
+  // LOGOUT FUNCTION
+  function logout() {
+    firebase.auth().signOut().then(() => {
+      window.location.href = "loginform.html";
+    });
+  }
+
+  // SHOW ADMIN LINK BASED ON ROLE
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) return;
+
+    const res = await db.collection("users").doc(user.uid).get();
+    if (res.exists && res.data().role === "admin") {
+      document.getElementById("adminLink").style.display = "inline";
+    }
+  });
+</script>

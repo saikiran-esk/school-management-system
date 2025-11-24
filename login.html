@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Login</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="auth-helper.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0b7a3e 0%, #085a2e 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .box {
+      width: 360px;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    h2 {
+      margin: 0 0 20px 0;
+      color: #0b7a3e;
+      text-align: center;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    input:focus {
+      border-color: #0b7a3e;
+      outline: none;
+    }
+
+    .btn {
+      background: #0b7a3e;
+      color: #fff;
+      padding: 12px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .btn:hover {
+      background: #096332;
+    }
+
+    .links {
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    a {
+      color: #0b7a3e;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h2>Login</h2>
+    <input id="email" type="email" placeholder="Email Address" required>
+    <input id="password" type="password" placeholder="Password" required>
+    <button class="btn" id="loginBtn">Login</button>
+    <div class="links">
+      <a href="signup.html">Sign up</a>
+      <a href="forgot.html">Forgot password?</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        alert('Please enter both email and password');
+        return;
+      }
+
+      try {
+        // SIGN IN WITH FIREBASE AUTH
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        const uid = cred.user.uid;
+
+        // FETCH USER ROLE AND STATUS FROM FIRESTORE
+        const userData = await getUserRole(uid);
+
+        if (!userData) {
+          alert('User profile not found. Please contact administrator or sign up again.');
+          await auth.signOut();
+          return;
+        }
+
+        // CHECK APPROVAL STATUS FOR STUDENTS AND TEACHERS
+        if (userData.role === 'student' || userData.role === 'teacher') {
+          if (!userData.approved) {
+            alert('Your account is pending approval by school staff.');
+            window.location.href = 'pending-approval.html';
+            return;
+          }
+        }
+
+        // REDIRECT BASED ON ROLE
+        const redirectUrl = getRedirectUrl(userData);
+        window.location.href = redirectUrl;
+
+      } catch (error) {
+        console.error(error);
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+          alert('Invalid email or password. Please try again.');
+        } else if (error.code === 'auth/invalid-email') {
+          alert('Please enter a valid email address.');
+        } else {
+          alert('Login error: ' + error.message);
+        }
+      }
+    });
+
+    // Allow Enter key to submit
+    document.getElementById('password').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('loginBtn').click();
+      }
+    });
+  </script>
+
+</body>
+
+</html>

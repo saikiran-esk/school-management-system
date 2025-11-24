@@ -1,43 +1,311 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Attendance</title>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
-</head>
-<body>
-  <h2>Attendance</h2>
-  <label>Class<input id="classForAttendance" value="8-A"></label>
-  <div id="studentsList"></div>
-  <button id="saveAttendance">Save</button>
+<meta charset="UTF-8">
+<title>Attendance</title>
 
-  <script>
-    async function loadClassStudents(cls) {
-      // simple: read admissions for the class and list
-      const snap = await db.collection('admissions').where('sclass','==',cls).get();
-      const container = document.getElementById('studentsList'); container.innerHTML = '';
-      snap.forEach(doc => {
-        const d = doc.data();
-        const div = document.createElement('div');
-        div.innerHTML = `<label><input type="checkbox" data-uid="${doc.id}" checked> ${d.name || '(unknown)'}</label>`;
-        container.appendChild(div);
-      });
-    }
-    document.getElementById('classForAttendance').addEventListener('change', ()=>loadClassStudents(document.getElementById('classForAttendance').value));
-    document.getElementById('saveAttendance').addEventListener('click', async ()=>{
-      const cls = document.getElementById('classForAttendance').value;
-      const checked = [...document.querySelectorAll('#studentsList input[type=checkbox]')].filter(i=>i.checked).map(i=>i.dataset.uid);
-      const docId = `${cls}-${new Date().toISOString().slice(0,10)}`;
-      await db.collection('attendance').doc(docId).set({
-        class: cls, date: firebase.firestore.FieldValue.serverTimestamp(), present: checked, createdBy: auth.currentUser.uid
-      });
-      alert('Attendance saved');
-    });
-    // init
-    auth.onAuthStateChanged(u => { if(!u) location.href='loginform.html'; else loadClassStudents(document.getElementById('classForAttendance').value); });
-  </script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<!-- Icons -->
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+
+<style>
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: #eef3f7;
+}
+
+/* PAGE WRAPPER */
+.container {
+  max-width: 1000px;
+  margin: 30px auto;
+  padding: 20px;
+}
+
+/* HEADER TITLE */
+.heading {
+  font-size: 32px;
+  font-weight: bold;
+  color: #0b7a3e;
+  margin-bottom: 15px;
+}
+
+/* CARD */
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
+}
+
+/* INPUTS */
+input, select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #dde3ea;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: 0.3s;
+  margin-bottom: 12px;
+}
+input:focus, select:focus {
+  border-color: #0b7a3e;
+  outline: none;
+}
+
+/* BUTTONS */
+.btn {
+  padding: 12px 18px;
+  background: #0b7a3e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: 0.2s;
+}
+.btn:hover {
+  background: #095f32;
+}
+
+.btn-red {
+  background: #d9534f;
+}
+.btn-red:hover {
+  background: #b83c37;
+}
+
+.btn-yellow {
+  background: #f7b731;
+}
+.btn-yellow:hover {
+  background: #e09f15;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+/* STUDENT LIST */
+.student-row {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #e7e7e7;
+}
+.student-row:hover {
+  background: #f9fafb;
+}
+.delete-btn {
+  margin-left: auto;
+  font-size: 20px;
+  color: #d9534f;
+  cursor: pointer;
+}
+
+/* SUMMARY BOX */
+.summary-box {
+  background: #eaf7ec;
+  padding: 20px;
+  border-radius: 10px;
+  border-left: 6px solid #0b7a3e;
+  font-size: 18px;
+}
+
+/* PROGRESS BAR */
+.progress-bar {
+  margin-top: 10px;
+  height: 16px;
+  border-radius: 10px;
+  background: #d2dfe4;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 10px;
+  background: #0b7a3e;
+  width: 0%;
+  transition: 0.8s;
+}
+
+/* ADD STUDENT ROW */
+.add-student-box {
+  display: flex;
+  gap: 10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<div id="nav"></div>
+<script>
+fetch("navbar.html").then(r=>r.text()).then(t=>document.getElementById("nav").innerHTML=t);
+</script>
+
+
+<div class="container">
+
+  <div class="heading"><i class="ri-user-check-line"></i> Attendance</div>
+
+  <!-- CLASS SELECTION -->
+  <div class="card">
+    <div class="section-title">Select Class</div>
+    <input id="classInput" placeholder="Example: 6-A or 8">
+    <button class="btn" onclick="loadStudents()"><i class="ri-search-line"></i> Load Students</button>
+  </div>
+
+  <!-- STUDENT LIST -->
+  <div class="card">
+    <div class="section-title"><i class="ri-team-line"></i> Students</div>
+    <div id="studentsList">Enter class to load students</div>
+
+    <br>
+    <button class="btn-yellow" onclick="saveAttendance('morning')"><i class="ri-sun-line"></i> Save Morning Attendance</button>
+    <button class="btn-yellow" onclick="saveAttendance('afternoon')"><i class="ri-sunset-line"></i> Save Afternoon Attendance</button>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="card">
+    <button class="btn" onclick="showSummary()"><i class="ri-bar-chart-box-line"></i> Show Attendance Summary</button>
+    <div id="summary" style="margin-top:15px;"></div>
+  </div>
+
+  <!-- ADD STUDENT -->
+  <div class="card">
+    <div class="section-title"><i class="ri-user-add-line"></i> Add Student</div>
+
+    <div class="add-student-box">
+      <input id="newStudentName" placeholder="Student Name">
+      <input id="newStudentRoll" placeholder="Roll No">
+    </div>
+
+    <button class="btn" onclick="addStudent()"><i class="ri-add-circle-line"></i> Add Student</button>
+  </div>
+
+</div>
+
+
+
+<script>
+
+auth.onAuthStateChanged(user=>{
+  if(!user) location.href="login.html";
+});
+
+// LOAD STUDENTS
+async function loadStudents(){
+  const cls = classInput.value.trim();
+  if(!cls) return alert("Enter class");
+
+  const snap = await db.collection("students")
+     .where("class", "==", cls)
+     .get();
+
+  const box = document.getElementById("studentsList");
+  box.innerHTML = "";
+
+  if(snap.empty){
+    box.textContent = "No students yet — add using the form below.";
+    return;
+  }
+
+  // Manual sort (no index needed)
+  let list = [];
+  snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+  list.sort((a,b)=> Number(a.roll) - Number(b.roll));
+
+  list.forEach(stu=>{
+    box.innerHTML += `
+      <div class="student-row">
+        <input type="checkbox" data-id="${stu.id}">
+        <span><b>${stu.roll}.</b> ${stu.name}</span>
+        <i class="ri-delete-bin-6-line delete-btn" onclick="deleteStudent('${stu.id}')"></i>
+      </div>
+    `;
+  });
+}
+
+// ADD STUDENT
+async function addStudent(){
+  const name = newStudentName.value.trim();
+  const roll = newStudentRoll.value.trim();
+  const cls = classInput.value.trim();
+
+  if(!cls) return alert("Enter class above first");
+  if(!name || !roll) return alert("Enter all fields");
+
+  await db.collection("students").add({ name, roll, class: cls });
+
+  alert("Student added");
+  loadStudents();
+}
+
+// DELETE STUDENT
+async function deleteStudent(id){
+  if(!confirm("Delete this student?")) return;
+
+  await db.collection("students").doc(id).delete();
+  loadStudents();
+}
+
+// SAVE ATTENDANCE
+async function saveAttendance(session){
+  const cls = classInput.value.trim();
+  const date = new Date().toISOString().slice(0,10);
+
+  const checked = [...document.querySelectorAll("#studentsList input[type=checkbox]")]
+      .filter(c=>c.checked)
+      .map(c=>c.dataset.id);
+
+  await db.collection("attendance").doc(cls).collection(date).doc(session).set({
+    present: checked
+  });
+
+  alert(session.toUpperCase()+" attendance saved!");
+}
+
+// SUMMARY
+async function showSummary(){
+  const cls = classInput.value.trim();
+  const date = new Date().toISOString().slice(0,10);
+
+  const studentsSnap = await db.collection("students").where("class","==",cls).get();
+  const total = studentsSnap.size;
+
+  const mSnap = await db.collection("attendance").doc(cls).collection(date).doc("morning").get();
+  const aSnap = await db.collection("attendance").doc(cls).collection(date).doc("afternoon").get();
+
+  const morning = mSnap.exists ? mSnap.data().present.length : 0;
+  const afternoon = aSnap.exists ? aSnap.data().present.length : 0;
+
+  const percent = Math.round(((morning + afternoon) / (total * 2)) * 100);
+
+  summary.innerHTML = `
+    <div class="summary-box">
+      Total Students: <b>${total}</b> <br>
+      Morning Present: <b>${morning}</b> <br>
+      Afternoon Present: <b>${afternoon}</b> <br><br>
+
+      <b>Overall Attendance: ${percent}%</b>
+
+      <div class="progress-bar">
+         <div class="progress-fill" style="width:${percent}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+</script>
+
 </body>
 </html>

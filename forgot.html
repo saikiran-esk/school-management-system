@@ -1,64 +1,36 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Forgot Password</title>
-    <style>
-        body {
-            background-color: whitesmoke;
-            font-family: Arial;
-        }
-        form {
-            width: 300px;
-            margin: auto;
-            margin-top: 50px;
-            padding: 20px;
-            background: white;
-            border-radius: 6px;
-            box-shadow: 0px 0px 10px lightgray;
-        }
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            border: 1px solid black;
-            border-radius: 4px;
-        }
-        input[type="submit"] {
-            background-color: red;
-            color: white;
-            cursor: pointer;
-        }
-        h2 {
-            text-align: center;
-        }
-    </style>
-
-    <script>
-        function resetPassword() {
-            let email = document.getElementById("email").value;
-
-            if (email === "") {
-                alert("Please enter your email!");
-                return false;
-            }
-
-            alert("Password reset link is sent to your email!");
-            return true;
-        }
-    </script>
+<meta charset="utf-8">
+<title>Forgot Password</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+ body{font-family:Arial;background:#f3f4f6;padding:30px}
+ .box{width:360px;margin:60px auto;background:#fff;padding:20px;border-radius:8px}
+ input{width:100%;padding:10px;margin:8px 0;border:1px solid #ddd;border-radius:6px}
+ .btn{background:#0b7a3e;color:#fff;padding:10px;border:0;border-radius:6px;cursor:pointer;width:100%}
+</style>
 </head>
 <body>
+<div class="box">
+  <h3>Reset Password</h3>
+  <input id="email" placeholder="Email">
+  <button class="btn" id="sendBtn">Send reset email</button>
+  <p style="margin-top:10px"><a href="login.html">Back to login</a></p>
+</div>
 
-<form onsubmit="return resetPassword()" action="loginform.html">
-    <h2>Forgot Password</h2>
-
-    <input id="email" type="text" placeholder="Enter Registered Email">
-
-    <input type="submit" value="Send Reset Link">
-
-    <a href="loginform.html">Back to Login</a>
-</form>
-
+<script>
+document.getElementById('sendBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('email').value.trim();
+  if (!email) return alert('Enter email');
+  try {
+    await auth.sendPasswordResetEmail(email);
+    alert('Reset email sent.');
+    location.href = 'login.html';
+  } catch (err) { alert(err.message); console.error(err); }
+});
+</script>
 </body>
 </html>

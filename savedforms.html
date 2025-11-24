@@ -1,19 +1,165 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Saved Forms</title>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
-  <script src="savedforms.js"></script>
+<meta charset="UTF-8">
+<title>Saved Admission Forms</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #f5f6f8;
+}
+.page {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.title {
+    font-size: 26px;
+    font-weight: bold;
+    color: #0b7a3e;
+    margin-bottom: 10px;
+}
+input, select {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+    width: 100%;
+    margin-bottom: 15px;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+th {
+    background: #0b7a3e;
+    color: white;
+}
+.btn {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    color: white;
+}
+.edit { background: #007bff; }
+.delete { background: #d9534f; }
+</style>
 </head>
+
 <body>
-  <h2>Saved Admission Forms</h2>
-  <table id="savedTable" border="1" width="100%">
-    <thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Class</th><th>Actions</th></tr></thead>
-    <tbody></tbody>
-  </table>
+
+<div id="nav"></div>
+<script>
+fetch("navbar.html")
+.then(res => res.text())
+.then(data => document.getElementById("nav").innerHTML = data);
+</script>
+
+<div class="page">
+    <div class="title">Saved Admission Forms</div>
+
+    <input id="search" placeholder="Search by name, phone, class..." oninput="loadForms()">
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Phone</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+auth.onAuthStateChanged(async user => {
+    if (!user) location.href = "login.html";
+    loadForms();
+});
+
+async function loadForms() {
+    const search = document.getElementById("search").value.toLowerCase();
+    const tbody = document.getElementById("tableBody");
+
+    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Loading...</td></tr>";
+
+    const snap = await db.collection("admissions").orderBy("name").get();
+
+    tbody.innerHTML = "";
+    let i = 1;
+
+    snap.forEach(doc => {
+        const d = doc.data();
+
+        // Search filter
+        if (
+            search &&
+            !d.name?.toLowerCase().includes(search) &&
+            !d.phone?.toLowerCase().includes(search) &&
+            !d.classJoined?.toLowerCase().includes(search)
+        ) return;
+
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+            <td>${i++}</td>
+            <td>${d.name || ''}</td>
+            <td>${d.classJoined || ''}</td>
+            <td>${d.phone || ''}</td>
+            <td>
+                <button class="btn edit" onclick="editForm('${doc.id}')">Edit</button>
+                <button class="btn delete" onclick="deleteForm('${doc.id}')">Delete</button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    if (tbody.innerHTML.trim() === "") {
+        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>No forms found</td></tr>";
+    }
+}
+
+function editForm(id) {
+    db.collection("admissions").doc(id).get().then(doc => {
+        localStorage.setItem("loadStudentFirestore", JSON.stringify({
+            id: id,
+            data: doc.data()
+        }));
+
+        location.href = "admissionform.html";
+    });
+}
+
+async function deleteForm(id) {
+    if (confirm("Delete this form permanently?")) {
+        await db.collection("admissions").doc(id).delete();
+        loadForms();
+    }
+}
+</script>
+
 </body>
 </html>
