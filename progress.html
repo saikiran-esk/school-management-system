@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
+  <script src="navbar-logic.js"></script>
 
   <style>
     * {
@@ -134,7 +135,10 @@
 <body>
   <div id="nav"></div>
   <script>
-    fetch("navbar.html").then(r => r.text()).then(t => document.getElementById("nav").innerHTML = t);
+    fetch("navbar.html").then(r => r.text()).then(t => {
+      document.getElementById("nav").innerHTML = t;
+      initNavbarLogic();
+    });
   </script>
 
   <div class="container">
