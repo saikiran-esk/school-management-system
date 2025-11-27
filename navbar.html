@@ -1,6 +1,5 @@
 <!-- NAVBAR (Reusable on all pages) -->
-<div id="navbar"
-     style="
+<div id="navbar" style="
         background:#0b7a3e;
         color:white;
         padding:12px;
@@ -9,7 +8,7 @@
         gap:16px;
         font-family:Arial, sans-serif;
      ">
-  
+
   <!-- LOGO -->
   <img src="ap logo.png" style="height:42px; border-radius:4px">
 
@@ -21,15 +20,12 @@
   <a href="attendance.html" style="color:white;text-decoration:none;font-size:15px;">Attendance</a>
 
   <!-- ADMIN ONLY LINK (default hidden) -->
-  <a id="adminLink"
-     href="admin.html"
-     style="color:white;text-decoration:none;font-size:15px;display:none;">
-     Admin Dashboard
+  <a id="adminLink" href="admin.html" style="color:white;text-decoration:none;font-size:15px;display:none;">
+    Admin Dashboard
   </a>
 
   <!-- RIGHT SIDE: LOGOUT BUTTON -->
-  <button onclick="logout()"
-          style="
+  <button onclick="logout()" style="
             margin-left:auto;
             background:white;
             color:#0b7a3e;
@@ -43,27 +39,34 @@
   </button>
 </div>
 
-<!-- REQUIRED Firebase references (included only once when navbar loads) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-
 <script>
   // LOGOUT FUNCTION
   function logout() {
-    firebase.auth().signOut().then(() => {
-      window.location.href = "loginform.html";
-    });
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().signOut().then(() => {
+        window.location.href = "login.html";
+      }).catch((error) => {
+        console.error("Logout error:", error);
+        window.location.href = "login.html";
+      });
+    } else {
+      window.location.href = "login.html";
+    }
   }
 
   // SHOW ADMIN LINK BASED ON ROLE
-  firebase.auth().onAuthStateChanged(async user => {
-    if (!user) return;
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) return;
 
-    const res = await db.collection("users").doc(user.uid).get();
-    if (res.exists && res.data().role === "admin") {
-      document.getElementById("adminLink").style.display = "inline";
-    }
-  });
+      try {
+        const res = await db.collection("users").doc(user.uid).get();
+        if (res.exists && res.data().role === "admin") {
+          document.getElementById("adminLink").style.display = "inline";
+        }
+      } catch (error) {
+        console.error("Error checking admin role:", error);
+      }
+    });
+  }
 </script>
