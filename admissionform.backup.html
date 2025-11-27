@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Admission Form – Final</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<!-- PDF Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+
+<style>
+body { font-family: Arial; background:#f5f6f7; padding:20px; margin:0; }
+.page {
+    width: 820px;
+    margin: auto;
+    background: white;
+    padding: 25px 30px;
+    border-radius: 6px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+.header { display:flex; justify-content:space-between; align-items:center; }
+.logo { height:70px }
+.title { text-align:center; flex:1; font-size:20px; font-weight:bold; color:#0b7a3e; }
+.sub { font-size:12px; color:#444; }
+
+label { font-weight:bold; margin-top:10px; display:block; }
+input, select {
+    width:100%; padding:8px;
+    border:1px solid #ccc; border-radius:4px;
+    margin-top:5px;
+}
+.two { display:flex; gap:12px; }
+.two > div { flex:1; }
+
+.btn-bar { margin-top:18px; display:flex; gap:10px; }
+.btn {
+    padding:10px 14px;
+    border-radius:6px;
+    border:none;
+    cursor:pointer;
+    font-weight:bold;
+}
+.btn-green { background:#0b7a3e; color:white; }
+.btn-outline { border:1px solid #0b7a3e; color:#0b7a3e; background:white; }
+
+.small { font-size:12px; color:#666; margin-top:12px; }
+
+/* PRINT CLEAN */
+@media print {
+    body { background:white; }
+    .page { box-shadow:none; width:100%; padding:0; }
+    .btn-bar,#nav { display:none!important; }
+    input, select { border:none; border-bottom:1px solid #000; }
+}
+</style>
+</head>
+
+<body>
+
+<div id="nav"></div>
+<script>
+fetch("navbar.html").then(r=>r.text()).then(t=>document.getElementById("nav").innerHTML=t);
+</script>
+
+<div class="page" id="formPage">
+
+  <div class="header">
+      <img src="ap logo.png" class="logo">
+      <div class="title">
+          ADMISSION FORM
+          <div class="sub">Government School – Admission Record</div>
+      </div>
+      <img src="sarvashiksha abhiyaan.png" class="logo">
+  </div>
+  <hr>
+
+  <!-- START FORM FIELDS -->
+  <label>Name of the Student</label>
+  <input id="name">
+
+  <div class="two">
+      <div>
+          <label>Gender</label>
+          <select id="gender"><option>Select</option><option>Boy</option><option>Girl</option><option>TG</option></select>
+      </div>
+      <div>
+          <label>Date of Birth</label>
+          <input id="dob" type="date">
+      </div>
+  </div>
+
+  <label>Mother Tongue</label>
+  <input id="motherTongue">
+
+  <label>Aadhar No of Student</label>
+  <input id="studentAadhar">
+
+  <label>Father's Name</label>
+  <input id="fatherName">
+
+  <div class="two">
+      <div><label>Father Occupation</label><input id="fatherOcc"></div>
+      <div><label>Father Aadhar</label><input id="fatherAadhar"></div>
+  </div>
+
+  <label>Phone No</label>
+  <input id="phone">
+
+  <div class="two">
+      <div><label>Child ID</label><input id="childId"></div>
+      <div><label>Family Ration Card No</label><input id="ration"></div>
+  </div>
+
+  <label>Residing With</label>
+  <input id="residingWith">
+
+  <div class="two">
+      <div><label>Guardian Name</label><input id="guardianName"></div>
+      <div><label>Guardian Occupation</label><input id="guardianOcc"></div>
+  </div>
+
+  <div class="two">
+      <div><label>Nationality</label><input id="nationality"></div>
+      <div><label>State</label><input id="state"></div>
+  </div>
+
+  <div class="two">
+      <div><label>Religion</label><input id="religion"></div>
+      <div><label>Caste</label><input id="caste"></div>
+  </div>
+
+  <label>Sub Caste</label>
+  <input id="subcaste">
+
+  <label>Residence</label>
+  <input id="residence">
+
+  <label>Previous School</label>
+  <input id="prevSchool">
+
+  <div class="two">
+      <div><label>School Code</label><input id="schoolCode"></div>
+      <div><label>Studied Class</label><input id="classStudied"></div>
+  </div>
+
+  <div class="two">
+      <div><label>Medium</label><input id="medium"></div>
+      <div><label>Eligible for Promotion</label>
+          <select id="promo"><option>Select</option><option>Yes</option><option>No</option></select>
+      </div>
+  </div>
+
+  <div class="two">
+      <div><label>Number of Record Sheets</label><input id="recordSheets"></div>
+      <div><label>Record Sheet/TC Date</label><input id="tcDate" type="date"></div>
+  </div>
+
+  <div class="two">
+      <div><label>Class Joined</label><input id="classJoined"></div>
+      <div><label>Medium (Again)</label><input id="mediumAgain"></div>
+  </div>
+
+  <label>ChildInfo No</label>
+  <input id="childInfoNo">
+
+  <div class="two">
+      <div><label>First Language Opted</label><input id="firstLang"></div>
+      <div><label>Second Language Opted</label><input id="secondLang"></div>
+  </div>
+
+  <div class="two">
+      <div><label>Personal Mark 1</label><input id="pMark1"></div>
+      <div><label>Personal Mark 2</label><input id="pMark2"></div>
+  </div>
+
+  <label>Remarks</label>
+  <input id="remarks">
+
+  <!-- BUTTONS -->
+  <div class="btn-bar">
+      <button class="btn btn-green" id="submitDownloadBtn">Submit & Download PDF</button>
+      <button class="btn btn-outline" id="downloadBlankBtn">Download Blank Form</button>
+      <button class="btn btn-outline" id="printBlankBtn">Print Blank Form</button>
+  </div>
+
+  <br>
+  <div class="small">Parent/Guardian Signature: _____________________________</div>
+  <br>
+  <div class="small">Headmaster Signature: ___________________________________</div>
+
+</div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+
+function getData(){
+    return {
+        name: $("name").value,
+        gender: $("gender").value,
+        dob: $("dob").value,
+        motherTongue: $("motherTongue").value,
+        studentAadhar: $("studentAadhar").value,
+        fatherName: $("fatherName").value,
+        fatherOcc: $("fatherOcc").value,
+        fatherAadhar: $("fatherAadhar").value,
+        phone: $("phone").value,
+        childId: $("childId").value,
+        ration: $("ration").value,
+        residingWith: $("residingWith").value,
+        guardianName: $("guardianName").value,
+        guardianOcc: $("guardianOcc").value,
+        nationality: $("nationality").value,
+        state: $("state").value,
+        religion: $("religion").value,
+        caste: $("caste").value,
+        subcaste: $("subcaste").value,
+        residence: $("residence").value,
+        prevSchool: $("prevSchool").value,
+        schoolCode: $("schoolCode").value,
+        classStudied: $("classStudied").value,
+        medium: $("medium").value,
+        promo: $("promo").value,
+        recordSheets: $("recordSheets").value,
+        tcDate: $("tcDate").value,
+        classJoined: $("classJoined").value,
+        mediumAgain: $("mediumAgain").value,
+        childInfoNo: $("childInfoNo").value,
+        firstLang: $("firstLang").value,
+        secondLang: $("secondLang").value,
+        pMark1: $("pMark1").value,
+        pMark2: $("pMark2").value,
+        remarks: $("remarks").value
+    };
+}
+
+let editId = null;
+
+/* Load existing record for edit */
+window.onload = () => {
+  const raw = localStorage.getItem("loadStudentFirestore");
+  if(raw){
+      const obj = JSON.parse(raw);
+      editId = obj.id;
+      Object.keys(obj.data).forEach(k => { if($(k)) $(k).value = obj.data[k]; });
+      localStorage.removeItem("loadStudentFirestore");
+  }
+};
+
+/* Save to Firestore */
+async function saveToFirestore(data){
+    const user = auth.currentUser;
+    if(!user){ alert("Login required"); return; }
+
+    data.createdBy = user.uid;
+    data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+    if(editId){
+        await db.collection("admissions").doc(editId).set(data,{merge:true});
+    } else {
+        await db.collection("admissions").add(data);
+    }
+}
+
+/* FIXED PDF FUNCTION */
+async function formToPDF(filename, blank){
+    const original = document.getElementById("formPage");
+    const clone = original.cloneNode(true);
+
+    clone.querySelectorAll(".btn-bar,#nav").forEach(el=>el?.remove());
+
+    clone.querySelectorAll("input,select").forEach(inp=>{
+        const box = document.createElement("div");
+        box.style.minHeight = "18px";
+        box.style.padding = "4px 0";
+        box.style.borderBottom = "1px solid #000";
+        box.textContent = blank ? "" : inp.value;
+        inp.parentNode.replaceChild(box, inp);
+    });
+
+    await html2pdf().set({
+        margin:10,
+        filename:filename,
+        html2canvas:{scale:2},
+        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}
+    }).from(clone).save();
+}
+
+/* BUTTONS */
+$("submitDownloadBtn").onclick = async () => {
+    const data = getData();
+    await saveToFirestore(data);
+    await formToPDF("admission-filled.pdf",false);
+};
+
+$("downloadBlankBtn").onclick = () => {
+    formToPDF("admission-blank.pdf",true);
+};
+
+$("printBlankBtn").onclick = async () => {
+    await formToPDF("admission-blank.pdf",true);
+    window.print();
+};
+</script>
+
+</body>
+</html>

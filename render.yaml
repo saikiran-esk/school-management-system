@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: school-website
+    env: static
+    buildCommand: echo "No build needed"
+    staticPublishPath: .

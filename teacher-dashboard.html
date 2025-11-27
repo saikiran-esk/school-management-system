@@ -105,154 +105,8 @@
             font-weight: bold;
         }
 
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.4);
-        }
-
-        .modal-content {
-            background-color: #fefefe;
-            margin: 10% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 600px;
-            border-radius: 8px;
-            position: relative;
-        }
-
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        /* Table Styles */
-        .styled-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 25px 0;
-            font-size: 0.9em;
-            font-family: sans-serif;
-            min-width: 400px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-        }
-
-        .styled-table thead tr {
-            background-color: #0b7a3e;
-            color: #ffffff;
-            text-align: left;
-        }
-
-        .styled-table th,
-        .styled-table td {
-            padding: 12px 15px;
-        }
-
-        .styled-table tbody tr {
-            border-bottom: 1px solid #dddddd;
-        }
-
-        .styled-table tbody tr:nth-of-type(even) {
-            background-color: #f3f3f3;
-        }
-
-        .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid #0b7a3e;
-        }
-
-        .view-btn {
-            background-color: #0b7a3e;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        /* Reused Progress Styles for Modal */
-        .prog-summary {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border-left: 5px solid #0b7a3e;
-        }
-
-        .prog-stat {
-            text-align: center;
-        }
-
-        .prog-stat label {
-            font-size: 12px;
-            color: #666;
-            display: block;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .prog-stat div {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .prog-badge {
-            background: #0b7a3e;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        .marks-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        .marks-table th {
-            text-align: left;
-            background: #f1f3f5;
-            padding: 10px;
-            color: #444;
-            font-weight: 600;
-        }
-
-        .marks-table td {
-            border-bottom: 1px solid #eee;
-            padding: 10px;
-            color: #333;
-        }
-
-        .marks-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .marks-total {
-            font-weight: bold;
-            color: #0b7a3e;
+        .options button:hover {
+            background: #0a6634;
         }
     </style>
 </head>
@@ -275,6 +129,7 @@
             <a href="teacher-dashboard.html">Dashboard</a>
             <a href="attendance.html">Attendance</a>
             <a href="progress.html">Progress Entry</a>
+            <a href="admissionform.html">New Admission</a>
             <a href="savedforms.html">Saved Admissions</a>
         </div>
 
@@ -290,31 +145,16 @@
                 <div class="options">
                     <button onclick="location.href='attendance.html'">📝 Take Attendance</button>
                     <button onclick="location.href='progress.html'">📊 Enter Progress</button>
+                    <button onclick="location.href='admissionform.html'">🎓 New Admission</button>
                     <button onclick="location.href='savedforms.html'">📁 View Saved Admissions</button>
                 </div>
             </div>
 
-            <div class="card">
-                <h3>Recent Progress Reports</h3>
-                <div id="recentProgressArea">Loading...</div>
-            </div>
-
         </div>
 
-    </div>
-
-    <!-- Modal -->
-    <div id="progressModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h3>Progress Details</h3>
-            <div id="modalContent"></div>
-        </div>
     </div>
 
     <script>
-        let allProgressDocs = [];
-
         auth.onAuthStateChanged(async user => {
             if (!user) return location.href = "login.html";
 
@@ -323,37 +163,11 @@
                 alert("Access Denied");
                 location.href = "students.html";
             }
-
-            // Fetch Recent Progress
-            loadRecentProgress(user.uid);
         });
 
-        async function loadRecentProgress(uid) {
-            try {
-                const snap = await db.collection('progress')
-                    .where('createdBy', '==', uid)
-                    .orderBy('createdAt', 'desc')
-                    .limit(10)
-                    .get();
-
-                if (snap.empty) {
-                    document.getElementById('recentProgressArea').innerText = "Error loading reports: " + e.message;
-                }
-                function closeModal() {
-                    document.getElementById('progressModal').style.display = "none";
-                }
-
-                // Close modal when clicking outside
-                window.onclick = function (event) {
-                    const modal = document.getElementById('progressModal');
-                    if (event.target == modal) {
-                        modal.style.display = "none";
-                    }
-                }
-
-                function logout() {
-                    auth.signOut().then(() => location.href = "login.html");
-                }
+        function logout() {
+            auth.signOut().then(() => location.href = "login.html");
+        }
     </script>
 
 </body>

@@ -1,38 +1,235 @@
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8">
-  <title>Signup</title>
+  <title>Sign Up - School Management</title>
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
+
+  <!-- EmailJS for admin notifications -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <script src="email-config.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0b7a3e 0%, #085a2e 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .box {
+      width: 360px;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    h2 {
+      margin: 0 0 20px 0;
+      color: #0b7a3e;
+      text-align: center;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #0b7a3e;
+      outline: none;
+    }
+
+    .btn {
+      background: #0b7a3e;
+      color: #fff;
+      padding: 12px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .btn:hover {
+      background: #096332;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .links {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    a {
+      color: #0b7a3e;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .info-box {
+      background: #f0f9ff;
+      border-left: 4px solid #0b7a3e;
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      color: #0b7a3e;
+      margin-top: 10px;
+    }
+  </style>
 </head>
+
 <body>
-  <h2>Create account</h2>
-  <input id="username" placeholder="Username"><br>
-  <input id="email" placeholder="Email"><br>
-  <input id="password" placeholder="Password" type="password"><br>
-  <button id="signupBtn">Sign up</button>
+  <div class="box">
+    <h2>Create Account</h2>
+
+    <div class="info-box">
+      ℹ️ Your account will require admin approval before you can log in.
+    </div>
+
+    <input id="username" placeholder="Full Name" required>
+    <input id="email" type="email" placeholder="Email Address" required>
+    <input id="password" type="password" placeholder="Password (min. 6 characters)" required>
+
+    <select id="role">
+      <option value="student">I am a Student</option>
+      <option value="teacher">I am a Teacher</option>
+    </select>
+
+    <button class="btn" id="signupBtn">Sign Up</button>
+    <div class="loading" id="loading">Creating account...</div>
+
+    <div class="links">
+      Already have an account? <a href="login.html">Login</a>
+    </div>
+  </div>
 
   <script>
-    document.getElementById('signupBtn').onclick = async () => {
+    // Initialize EmailJS
+    (function () {
+      emailjs.init(EMAIL_CONFIG.PUBLIC_KEY);
+    })();
+
+    document.getElementById('signupBtn').addEventListener('click', async () => {
       const username = document.getElementById('username').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value.trim();
-      if (!email || !password) return alert('Email & password required');
+      const role = document.getElementById('role').value;
+
+      // Validation
+      if (!username) {
+        alert('Please enter your full name');
+        return;
+      }
+      if (!email || !password) {
+        alert('Email & password required');
+        return;
+      }
+      if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+      }
+
+      // Show loading
+      const signupBtn = document.getElementById('signupBtn');
+      const loading = document.getElementById('loading');
+      signupBtn.disabled = true;
+      loading.style.display = 'block';
+
       try {
+        // Create Firebase user
         const cred = await auth.createUserWithEmailAndPassword(email, password);
-        // send verification
+
+        // Send email verification
         await cred.user.sendEmailVerification();
-        // save user profile (default role = student)
-        await db.collection('users').doc(cred.user.uid).set({
-          username, email, role: 'student', createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        alert('Account created. Please verify your email before logging in.');
-        window.location.href = 'loginform.html';
-      } catch (e) { alert(e.message); console.error(e); }
-    };
+
+        // Save user profile to Firestore
+        const userData = {
+          username: username,
+          email: email,
+          role: role,
+          approved: false, // Requires admin approval
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db.collection('users').doc(cred.user.uid).set(userData);
+
+        // Send email notification to admin
+        try {
+          await sendAdminNotification({
+            username: username,
+            email: email,
+            role: role
+          });
+          console.log('Admin notification sent successfully');
+        } catch (emailError) {
+          console.error('Failed to send admin notification:', emailError);
+          // Don't block signup if email fails
+        }
+
+        alert('Account created successfully! Please verify your email and wait for admin approval.');
+        window.location.href = 'pending-approval.html';
+
+      } catch (e) {
+        console.error(e);
+        if (e.code === 'auth/email-already-in-use') {
+          alert('This email is already registered. Please login or use a different email.');
+        } else if (e.code === 'auth/invalid-email') {
+          alert('Please enter a valid email address.');
+        } else if (e.code === 'auth/weak-password') {
+          alert('Password is too weak. Please use a stronger password.');
+        } else {
+          alert('Error: ' + e.message);
+        }
+      } finally {
+        // Hide loading
+        signupBtn.disabled = false;
+        loading.style.display = 'none';
+      }
+    });
+
+    // Allow Enter key to submit
+    document.getElementById('password').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('signupBtn').click();
+      }
+    });
   </script>
 </body>
+
 </html>

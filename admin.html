@@ -6,7 +6,7 @@
   <title>Admin Dashboard — School</title>
 
   <!-- Chart.js for charts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -223,7 +223,7 @@
       <div class="card" style="min-width:240px">
         <h3>Quick Actions</h3>
         <div style="display:flex; gap:8px;">
-          <button id="goToSite" class="btn-gray">Open Live Site</button>
+          <button id="pendingUsersBtn" class="btn-gray">Pending Users</button>
           <button id="createUserBtn" class="btn-green">Create User</button>
         </div>
       </div>
@@ -296,6 +296,7 @@
     let pageSize = Number(document.getElementById('pageSize').value) || 10;
     let pageNum = 1;
     let fetchedDocs = []; // holds currently visible docs (for CSV)
+    let allAdmissions = []; // Cached admissions for performance
     let classesSet = new Set();
 
     // DOM refs
@@ -317,49 +318,79 @@
     async function ensureAdmin() {
       currentUser = firebase.auth().currentUser;
       if (!currentUser) {
-        statTotal.textContent = snap.size;
-        // count unique students by name+phone
-        const set = new Set();
-        snap.forEach(d => {
-          const dt = d.data();
-          set.add((dt.name || '') + '|' + (dt.phone || ''));
-        });
-        statStudents.textContent = set.size;
-
-        // recent 7 days
-        const seven = new Date(); seven.setDate(seven.getDate() - 7);
-        const recentSnap = await db.collection('admissions').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(seven)).get();
-        statRecent.textContent = recentSnap.size;
+        alert('Not logged in');
+        location.href = 'login.html';
+        return;
       }
-
-      // populate class filter from admissions
-      async function loadClasses() {
-        classesSet.clear();
-        const snap = await db.collection('admissions').get();
-        snap.forEach(doc => {
-          const d = doc.data();
-          if (d.sclass) classesSet.add(d.sclass);
-        });
-        // rebuild select
-        classFilter.innerHTML = '<option value=\"\">All classes</option>';
-        Array.from(classesSet).sort().forEach(c => {
-          const opt = document.createElement('option'); opt.value = c; opt.textContent = c;
-          classFilter.appendChild(opt);
-        });
+      adminUid = currentUser.uid;
+      const userDoc = await db.collection('users').doc(adminUid).get();
+      if (!userDoc.exists || userDoc.data().role !== 'admin') {
+        alert('Access denied: admin role required');
+        firebase.auth().signOut();
+        location.href = 'login.html';
+        return;
       }
+    }
 
-      // render table rows
-      function renderRows(docs) {
-        tbody.innerHTML = '';
-        fetchedDocs = []; // reset
-        let i = (pageNum - 1) * pageSize;
-        docs.forEach((doc) => {
-          i++;
-          const d = doc.data();
-          fetchedDocs.push({ id: doc.id, data: d });
-          const tr = document.createElement('tr');
-          const created = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : '';
-          tr.innerHTML = `<td>${i}</td>
+    // Load stats and classes (combined for performance)
+    async function loadDashboardData() {
+      // Safety limit to prevent freezing on large datasets
+      const limit = 1000;
+      const snap = await db.collection('admissions').orderBy('createdAt', 'desc').limit(limit).get();
+      allAdmissions = snap.docs;
+
+      // 1. Stats
+      statTotal.textContent = snap.size + (snap.size === limit ? '+' : '');
+
+      const uniqueSet = new Set();
+      classesSet.clear();
+
+      let recentCount = 0;
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      allAdmissions.forEach(doc => {
+        const d = doc.data();
+
+        // Unique students
+        uniqueSet.add((d.name || '') + '|' + (d.phone || ''));
+
+        // Classes
+        if (d.sclass) classesSet.add(d.sclass);
+
+        // Recent
+        if (d.createdAt && d.createdAt.toDate && d.createdAt.toDate() >= sevenDaysAgo) {
+          recentCount++;
+        }
+      });
+
+      statStudents.textContent = uniqueSet.size;
+      statRecent.textContent = recentCount;
+
+      // 2. Populate Class Filter
+      const currentVal = classFilter.value;
+      classFilter.innerHTML = '<option value="">All classes</option>';
+      Array.from(classesSet).sort().forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        if (c === currentVal) opt.selected = true;
+        classFilter.appendChild(opt);
+      });
+    }
+
+    // render table rows
+    function renderRows(docs) {
+      tbody.innerHTML = '';
+      fetchedDocs = []; // reset
+      let i = (pageNum - 1) * pageSize;
+      docs.forEach((doc) => {
+        i++;
+        const d = doc.data();
+        fetchedDocs.push({ id: doc.id, data: d });
+        const tr = document.createElement('tr');
+        const created = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : '';
+        tr.innerHTML = `<td>${i}</td>
         <td>${esc(d.name || '')}</td>
         <td>${esc(d.phone || '')}</td>
         <td>${esc(d.sclass || '')}</td>
@@ -369,179 +400,185 @@
           <button class="btn-gray" onclick="promoteUserPrompt('${doc.id}')">Promote User</button>
           <button class="btn-red" onclick="deleteAdmission('${doc.id}')">Delete</button>
         </td>`;
-          tbody.appendChild(tr);
+        tbody.appendChild(tr);
+      });
+      resultCount.textContent = docs.length;
+      pageNumEl.textContent = pageNum;
+    }
+
+    // main query builder — naive client-side pagination (fetch limited, fallback)
+    async function loadAdmissions() {
+      pageSize = Number(document.getElementById('pageSize').value) || 10;
+      const qText = qSearch.value.trim().toLowerCase();
+      const cls = classFilter.value;
+      const order = sortBy.value;
+
+      // Use cached data
+      let docs = allAdmissions || [];
+
+      // apply simple filters
+      if (cls) docs = docs.filter(d => (d.data().sclass || '').toLowerCase() === cls.toLowerCase());
+      if (qText) {
+        docs = docs.filter(d => {
+          const dd = d.data();
+          return (dd.name || '').toLowerCase().includes(qText) || (dd.phone || '').toLowerCase().includes(qText) || (dd.sclass || '').toLowerCase().includes(qText);
         });
-        resultCount.textContent = docs.length;
-        pageNumEl.textContent = pageNum;
       }
+      // sort
+      if (order === 'createdAt_asc') docs = docs.reverse();
 
-      // main query builder — naive client-side pagination (fetch limited, fallback)
-      async function loadAdmissions() {
-        pageSize = Number(document.getElementById('pageSize').value) || 10;
-        const qText = qSearch.value.trim().toLowerCase();
-        const cls = classFilter.value;
-        const order = sortBy.value;
+      // paging (client-side)
+      const start = (pageNum - 1) * pageSize;
+      const pageDocs = docs.slice(start, start + pageSize);
 
-        // For simplicity and reliability with Firestore rules, we fetch a reasonable limit and then filter client-side.
-        // If your data grows huge, implement server-side paging with cursors.
-        const limit = 500; // safety cap
-        const snap = await db.collection('admissions').orderBy('createdAt', 'desc').limit(limit).get();
-        let docs = snap.docs || [];
-        // apply simple filters
-        if (cls) docs = docs.filter(d => (d.data().sclass || '').toLowerCase() === cls.toLowerCase());
-        if (qText) {
-          docs = docs.filter(d => {
-            const dd = d.data();
-            return (dd.name || '').toLowerCase().includes(qText) || (dd.phone || '').toLowerCase().includes(qText) || (dd.sclass || '').toLowerCase().includes(qText);
-          });
+      renderRows(pageDocs.map(x => x)); // pageDocs are doc objects already
+      // also refresh charts
+      buildCharts(docs);
+    }
+
+    // actions
+    window.viewForm = async function (id) {
+      // open admission form in edit mode — fetch doc and store in localStorage
+      const doc = await db.collection('admissions').doc(id).get();
+      if (!doc.exists) return alert('Not found');
+      localStorage.setItem('loadStudentFirestore', JSON.stringify({ id: doc.id, data: doc.data() }));
+      window.open('admissionform.html', '_blank');
+    };
+
+    window.deleteAdmission = async function (id) {
+      if (!confirm('Delete this admission permanently?')) return;
+      await db.collection('admissions').doc(id).delete();
+      alert('Deleted');
+      await refreshAll();
+    };
+
+    // Promote user: find by phone or create user doc (simple)
+    window.promoteUserPrompt = async function (admissionId) {
+      // get admission doc to locate phone/email
+      const doc = await db.collection('admissions').doc(admissionId).get();
+      if (!doc.exists) return alert('Admission not found');
+      const d = doc.data();
+      const phone = d.phone || '';
+      const email = d.email || '';
+      const username = prompt('Enter username for this user (e.g., teacher name):', d.name || '');
+      if (username === null) return; // cancelled
+      const role = prompt('Role to assign (admin / teacher / student):', 'teacher');
+      if (!role) return;
+      // create or update a users/{uid-like} doc — since we do not have auth UID for this person, create a user doc keyed by email or phone
+      // NOTE: In real app, you should use auth.createUser (server-side) or invite flow. This is a simple admin-managed mapping.
+      const key = (email || phone || ('tmp_' + Date.now())).replace(/[.#$[\]]/g, '_');
+      await db.collection('users').doc(key).set({
+        username, email: email || null, phone: phone || null, role: role, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      alert('User promoted/created with doc id: ' + key);
+    };
+
+    // CSV export
+    document.getElementById('exportCsv').addEventListener('click', () => {
+      if (!fetchedDocs.length) return alert('No data to export');
+      const rows = fetchedDocs.map((r, idx) => {
+        const d = r.data;
+        return {
+          '#': idx + 1,
+          id: r.id,
+          name: d.name || '',
+          phone: d.phone || '',
+          class: d.sclass || '',
+          createdAt: d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString() : ''
+        };
+      });
+      const header = Object.keys(rows[0]).join(',') + '\\n';
+      const csv = header + rows.map(r => Object.values(r).map(v => '\"' + String(v).replace(/\"/g, '\"\"') + '\"').join(',')).join('\\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'admissions_export.csv'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Refresh
+    async function refreshAll() {
+      await loadDashboardData();
+      loadAdmissions();
+      loadMarksChart();
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+    document.getElementById('doSearch').addEventListener('click', () => { pageNum = 1; loadAdmissions(); });
+    document.getElementById('nextPage').addEventListener('click', () => { pageNum++; loadAdmissions(); });
+    document.getElementById('prevPage').addEventListener('click', () => { if (pageNum > 1) pageNum--; loadAdmissions(); });
+    document.getElementById('pageSize').addEventListener('change', () => { pageNum = 1; loadAdmissions(); });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => firebase.auth().signOut().then(() => location.href = 'login.html'));
+    document.getElementById('pendingUsersBtn').addEventListener('click', () => window.open('pending-users.html', '_blank'));
+
+    document.getElementById('createUserBtn').addEventListener('click', async () => {
+      const username = prompt('username:');
+      if (!username) return;
+      const email = prompt('email (optional):');
+      const role = prompt('role (admin/teacher/student):', 'teacher');
+      // create doc keyed by email or username
+      const key = (email || username + '_' + Date.now()).replace(/[.#$[\\]]/g, '_');
+      await db.collection('users').doc(key).set({ username, email: email || null, role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      alert('User created: ' + key);
+      await refreshAll();
+    });
+
+    // build charts (simple client-side aggregation)
+    function buildCharts(currentDocs) {
+      try {
+        // admissions by class
+        const counts = {};
+        currentDocs.forEach(d => {
+          const cls = (d.data().sclass || 'Unknown');
+          counts[cls] = (counts[cls] || 0) + 1;
+        });
+        const labels = Object.keys(counts).sort();
+        const data = labels.map(l => counts[l]);
+
+        if (chartClasses) chartClasses.destroy();
+        const ctx = document.getElementById('chartClasses').getContext('2d');
+        chartClasses = new Chart(ctx, {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'Admissions', data, backgroundColor: 'rgba(11,122,62,0.8)' }] },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadMarksChart() {
+      try {
+        // marks overview from progress collection — compute latest finalPercent per student
+        const snap = await db.collection('progress').orderBy('createdAt', 'desc').limit(200).get();
+        const latest = {}; // latest per studentName
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (!d.studentName) return;
+          if (!latest[d.studentName]) latest[d.studentName] = d.finalPercent || 0;
+        });
+        const topNames = Object.keys(latest).slice(0, 8);
+        const marks = topNames.map(n => latest[n]);
+        if (chartMarks) chartMarks.destroy();
+        const ctx2 = document.getElementById('chartMarks').getContext('2d');
+        chartMarks = new Chart(ctx2, {
+          type: 'line',
+          data: { labels: topNames, datasets: [{ label: 'Final %', data: marks, borderColor: 'rgba(11,122,62,0.9)', tension: 0.3 }] },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+      } catch (e) { console.error(e); }
+    }
+
+    // init
+    (async function init() {
+      // ensure user is authenticated and has admin role
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) {
+          location.href = 'login.html';
+          return;
         }
-        // sort
-        if (order === 'createdAt_asc') docs = docs.reverse();
-
-        // paging (client-side)
-        const start = (pageNum - 1) * pageSize;
-        const pageDocs = docs.slice(start, start + pageSize);
-
-        renderRows(pageDocs.map(x => x)); // pageDocs are doc objects already
-        // also refresh charts
-        buildCharts(docs);
-      }
-
-      // actions
-      window.viewForm = async function (id) {
-        // open admission form in edit mode — fetch doc and store in localStorage
-        const doc = await db.collection('admissions').doc(id).get();
-        if (!doc.exists) return alert('Not found');
-        localStorage.setItem('loadStudentFirestore', JSON.stringify({ id: doc.id, data: doc.data() }));
-        window.open('admissionform.html', '_blank');
-      };
-
-      window.deleteAdmission = async function (id) {
-        if (!confirm('Delete this admission permanently?')) return;
-        await db.collection('admissions').doc(id).delete();
-        alert('Deleted');
-        await refreshAll();
-      };
-
-      // Promote user: find by phone or create user doc (simple)
-      window.promoteUserPrompt = async function (admissionId) {
-        // get admission doc to locate phone/email
-        const doc = await db.collection('admissions').doc(admissionId).get();
-        if (!doc.exists) return alert('Admission not found');
-        const d = doc.data();
-        const phone = d.phone || '';
-        const email = d.email || '';
-        const username = prompt('Enter username for this user (e.g., teacher name):', d.name || '');
-        if (username === null) return; // cancelled
-        const role = prompt('Role to assign (admin / teacher / student):', 'teacher');
-        if (!role) return;
-        // create or update a users/{uid-like} doc — since we do not have auth UID for this person, create a user doc keyed by email or phone
-        // NOTE: In real app, you should use auth.createUser (server-side) or invite flow. This is a simple admin-managed mapping.
-        const key = (email || phone || ('tmp_' + Date.now())).replace(/[.#$[\]]/g, '_');
-        await db.collection('users').doc(key).set({
-          username, email: email || null, phone: phone || null, role: role, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        alert('User promoted/created with doc id: ' + key);
-      };
-
-      // CSV export
-      document.getElementById('exportCsv').addEventListener('click', () => {
-        if (!fetchedDocs.length) return alert('No data to export');
-        const rows = fetchedDocs.map((r, idx) => {
-          const d = r.data;
-          return {
-            '#': idx + 1,
-            id: r.id,
-            name: d.name || '',
-            phone: d.phone || '',
-            class: d.sclass || '',
-            createdAt: d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString() : ''
-          };
-        });
-        const header = Object.keys(rows[0]).join(',') + '\\n';
-        const csv = header + rows.map(r => Object.values(r).map(v => '\"' + String(v).replace(/\"/g, '\"\"') + '\"').join(',')).join('\\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = 'admissions_export.csv'; a.click();
-        URL.revokeObjectURL(url);
-      });
-
-      // Refresh
-      async function refreshAll() {
-        await loadStats();
-        await loadClasses();
-        await loadAdmissions();
-      }
-
-      document.getElementById('refreshBtn').addEventListener('click', refreshAll);
-      document.getElementById('doSearch').addEventListener('click', () => { pageNum = 1; loadAdmissions(); });
-      document.getElementById('nextPage').addEventListener('click', () => { pageNum++; loadAdmissions(); });
-      document.getElementById('prevPage').addEventListener('click', () => { if (pageNum > 1) pageNum--; loadAdmissions(); });
-      document.getElementById('pageSize').addEventListener('change', () => { pageNum = 1; loadAdmissions(); });
-      document.getElementById('goToSite').addEventListener('click', () => window.open(window.location.origin, '_blank'));
-      document.getElementById('logoutBtn').addEventListener('click', () => firebase.auth().signOut().then(() => location.href = 'loginform.html'));
-      document.getElementById('createUserBtn').addEventListener('click', async () => {
-        const username = prompt('username:');
-        if (!username) return;
-        const email = prompt('email (optional):');
-        const role = prompt('role (admin/teacher/student):', 'teacher');
-        // create doc keyed by email or username
-        const key = (email || username + '_' + Date.now()).replace(/[.#$[\\]]/g, '_');
-        await db.collection('users').doc(key).set({ username, email: email || null, role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-        alert('User created: ' + key);
+        await ensureAdmin();
         await refreshAll();
       });
-
-      // build charts (simple client-side aggregation)
-      function buildCharts(allDocs) {
-        try {
-          // admissions by class
-          const counts = {};
-          allDocs.forEach(d => {
-            const cls = (d.data().sclass || 'Unknown');
-            counts[cls] = (counts[cls] || 0) + 1;
-          });
-          const labels = Object.keys(counts).sort();
-          const data = labels.map(l => counts[l]);
-
-          if (chartClasses) chartClasses.destroy();
-          const ctx = document.getElementById('chartClasses').getContext('2d');
-          chartClasses = new Chart(ctx, {
-            type: 'bar',
-            data: { labels, datasets: [{ label: 'Admissions', data, backgroundColor: 'rgba(11,122,62,0.8)' }] },
-            options: { responsive: true, maintainAspectRatio: false }
-          });
-
-          // marks overview from progress collection — compute latest finalPercent per student
-          db.collection('progress').orderBy('createdAt', 'desc').limit(500).get().then(snap => {
-            const latest = {}; // latest per studentName
-            snap.forEach(doc => {
-              const d = doc.data();
-              if (!d.studentName) return;
-              if (!latest[d.studentName]) latest[d.studentName] = d.finalPercent || 0;
-            });
-            const topNames = Object.keys(latest).slice(0, 8);
-            const marks = topNames.map(n => latest[n]);
-            if (chartMarks) chartMarks.destroy();
-            const ctx2 = document.getElementById('chartMarks').getContext('2d');
-            chartMarks = new Chart(ctx2, {
-              type: 'line',
-              data: { labels: topNames, datasets: [{ label: 'Final %', data: marks, borderColor: 'rgba(11,122,62,0.9)', tension: 0.3 }] },
-              options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
-            });
-          });
-
-        } catch (e) { console.error(e); }
-      }
-
-      // init
-      (async function init() {
-        // require auth
-        fetch("navbar.html")
-          .then(res => res.text())
-          .then(data => {
-            document.getElementById("nav").innerHTML = data;
-          });
+    })();
   </script>
 
 </body>
