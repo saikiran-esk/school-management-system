@@ -242,6 +242,12 @@ let editId = null;
 
 /* Load existing record for edit */
 window.onload = () => {
+  // Check if Firebase is loaded
+  if (typeof firebase === 'undefined') {
+    console.error('Firebase not loaded');
+    return;
+  }
+  
   const raw = localStorage.getItem("loadStudentFirestore");
   if(raw){
       const obj = JSON.parse(raw);
@@ -253,16 +259,33 @@ window.onload = () => {
 
 /* Save to Firestore */
 async function saveToFirestore(data){
+    // Check if Firebase is initialized
+    if (typeof firebase === 'undefined' || typeof auth === 'undefined' || typeof db === 'undefined') {
+        alert("Firebase not initialized. Please refresh the page.");
+        return;
+    }
+    
     const user = auth.currentUser;
-    if(!user){ alert("Login required"); return; }
+    if(!user){ 
+        alert("Login required. Please login first."); 
+        window.location.href = 'login.html';
+        return; 
+    }
 
     data.createdBy = user.uid;
     data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
-    if(editId){
-        await db.collection("admissions").doc(editId).set(data,{merge:true});
-    } else {
-        await db.collection("admissions").add(data);
+    try {
+        if(editId){
+            await db.collection("admissions").doc(editId).set(data,{merge:true});
+            alert("Form updated successfully!");
+        } else {
+            await db.collection("admissions").add(data);
+            alert("Form submitted successfully!");
+        }
+    } catch (error) {
+        console.error("Error saving to Firestore:", error);
+        alert("Error saving form: " + error.message);
     }
 }
 
